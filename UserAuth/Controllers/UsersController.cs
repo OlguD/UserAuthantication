@@ -33,11 +33,11 @@ public class UsersController : ControllerBase
 
     [Authorize(Roles = "Admin")]
     [HttpPut("change-role")]
-    public IActionResult ChangeUserRole([FromBody] User userChangingRole, [FromBody] string userChanging)
+    public IActionResult ChangeUserRole([FromBody] ChangeRoleRequest request)
     {
-        if (userChangingRole != null && userChanging != null)
+        if (request != null && !string.IsNullOrEmpty(request.UserChanging))
         {
-            _userService.ChangeUserRole(userChangingRole, userChanging);
+            _userService.ChangeUserRole(request.UserChangingRole, request.UserChanging);
             return Ok("User role changed successfully.");
         }
         return BadRequest("Invalid request data.");
@@ -45,12 +45,12 @@ public class UsersController : ControllerBase
     
     [Authorize]
     [HttpPut("change-password")]
-    public IActionResult ChangePassword([FromBody] User user, [FromBody] string newPassword)
+    public IActionResult ChangePassword([FromBody] ChangePasswordRequest request)
     {
-        var updatedUser = _userService.GetUserByUsername(user.Username);
+        var updatedUser = _userService.GetUserByUsername(request.User.Username);
         if (updatedUser != null)
         {
-            _userService.ChangePassword(updatedUser, newPassword);
+            _userService.ChangePassword(updatedUser, request.NewPassword);
             return Ok("Password changed successfully.");
         }
         return BadRequest("User Not Found.");
@@ -58,12 +58,12 @@ public class UsersController : ControllerBase
     
     [Authorize]
     [HttpPut("change-email")]
-    public IActionResult ChangeEmail([FromBody] User user, [FromBody] string newEmail)
+    public IActionResult ChangeEmail([FromBody] ChangeEmailRequest request)
     {
-        var updatedUser = _userService.GetUserByUsername(user.Username);
+        var updatedUser = _userService.GetUserByUsername(request.User.Username);
         if (updatedUser != null)
         {
-            _userService.ChangeEmail(user, newEmail);
+            _userService.ChangeEmail(request.User, request.NewEmail);
             return Ok("Email changed successfully.");
         }
         return BadRequest("User Not Found.");
