@@ -3,12 +3,13 @@ namespace UserAuth.Services;
 
 public interface IUserService
 {
-    public IEnumerable<User> GetAllUsers();
-    public User? GetUserByUsername(string username);
-    public User? Add(User user);
-    public User? Validate(string username, string password);
+    Task<List<User>> GetAllAsync();
+    Task<User> GetByUsernameAsync(string username);
+    Task<User> AddAsync(User user);
+    Task DeleteAsync(User adminUser, string username);
+    User? Validate(string username, string password);
 
-    public void ChangeUserRole(User userWhoIsChangingRole, string userWhoseRoleIsChanging);
-    public User? ChangePassword(User user, string newPassword);
-    public User? ChangeEmail(User user, string newEmail);
+    Task<User> ChangeUserRole(string username, string targetUsername, string newRole);
+    Task<User> ChangePasswordAsync(string username, string oldPassword, string newPassword);
+    Task<User> ChangeEmailAsync(string username, string newEmail);
 }

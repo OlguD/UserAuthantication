@@ -4,8 +4,13 @@ using System.Text;
 using UserAuth.Helpers;
 using UserAuth.Middlewares;
 using UserAuth.Services;
+using Microsoft.EntityFrameworkCore;
+using UserAuth.Data;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // Add services to the container.
 
@@ -34,7 +39,7 @@ builder.Services.AddAuthentication(option =>
     };
 });
 
-builder.Services.AddSingleton<IUserService, UserService>();
+builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddSingleton<JwtHelper>();
 
 var app = builder.Build();

@@ -4,6 +4,7 @@ namespace UserAuth.Models;
 
 public class ChangeRoleRequest
 {
-    public User UserChangingRole { get; set; }
+    public string UserChangingRole { get; set; }
     public string UserChanging { get; set; }
+    public string Role { get; set; }
 }

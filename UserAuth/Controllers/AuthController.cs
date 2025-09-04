@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using UserAuth.Services;
 using UserAuth.Models;
 using UserAuth.Helpers;
+using System.Threading.Tasks;
 
 namespace UserAuth.Controllers;
 
@@ -19,15 +20,25 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("register")]
-    public IActionResult Register([FromBody] User user)
+    public async Task<IActionResult> Register([FromBody] User user)
     {
-        if (_userService.GetUserByUsername(user.Username) != null)
+        try
         {
-            return BadRequest("Username already exists");
-        }
+            var existingUser = await _userService.GetByUsernameAsync(user.Username);
+            if (existingUser != null)
+            {
+                return BadRequest("Username already exists");
+            }
 
-        _userService.Add(user);
-        return Ok("User registered successfully");
+            await _userService.AddAsync(user);
+            return Ok("User registered successfully");
+        }
+        catch
+        {
+            // If GetByUsernameAsync throws a UserNotFoundException, it means the user doesn't exist
+            await _userService.AddAsync(user);
+            return Ok("User registered successfully");
+        }
     }
 
     [HttpPost("login")]

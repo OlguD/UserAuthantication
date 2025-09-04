@@ -2,6 +2,11 @@ using Xunit;
 using UserAuth.Services;
 using UserAuth.Models;
 using UserAuth.Exceptions;
+using System;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using UserAuth.Data;
+
 namespace UserAuth.Tests;
 
 public class ExceptionTests : IDisposable
@@ -10,10 +15,18 @@ public class ExceptionTests : IDisposable
     private readonly User _user;
     private readonly User _admin;
     private readonly User _fakeUser;
+    private readonly AppDbContext _context;
     
     public ExceptionTests()
     {
-        _userService = new UserService();
+        // Create in-memory database for testing
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(databaseName: "TestUserAuthDb_" + Guid.NewGuid().ToString())
+            .Options;
+        
+        _context = new AppDbContext(options);
+        _userService = new UserService(_context);
+        
         _user = new User
         {
             Username = "test_username",
@@ -33,10 +46,10 @@ public class ExceptionTests : IDisposable
             Surname = "test_admin_surname"
         };
 
-        _userService.Add(_user);
-        _userService.Add(_admin);
+        _userService.AddAsync(_user).Wait();
+        _userService.AddAsync(_admin).Wait();
 
-        _fakeUser = (new User
+        _fakeUser = new User
         {
             Username = "fake_username",
             Password = "fake_password",
@@ -44,53 +57,61 @@ public class ExceptionTests : IDisposable
             Role = "User",
             Name = "fake_name",
             Surname = "fake_surname"
-        });
+        };
     }
 
     public void Dispose()
     {
-        // Cleanup if needed
+        _context.Database.EnsureDeleted();
+        _context.Dispose();
     }
 
     [Fact]
-    public void ChangePassword_UserNotFound_ShouldThrow()
+    public async Task ChangePassword_UserNotFound_ShouldThrow()
     {
-        Assert.Throws<UserNotFoundException>(() =>
-            _userService.ChangePassword(_fakeUser, "new_password"));
+        await Assert.ThrowsAsync<UserNotFoundException>(() =>
+            _userService.ChangePasswordAsync("fake_username", "old_password", "new_password"));
     }
     
     [Fact]
-    public void ChangePassword_SamePassword_ShouldThrow()
+    public async Task ChangePassword_InvalidPassword_ShouldThrow()
     {
-        Assert.Throws<InvalidOperationException>(() =>
-            _userService.ChangePassword(_user, _user.Password));
+        await Assert.ThrowsAsync<InvalidPasswordException>(() =>
+            _userService.ChangePasswordAsync(_user.Username, "wrong_password", "new_password"));
     }
     
     [Fact]
-    public void ChangeEmail_UserNotFound_ShouldThrow()
+    public async Task ChangePassword_SamePassword_ShouldThrow()
     {
-        Assert.Throws<UserNotFoundException>(() =>
-            _userService.ChangeEmail(_fakeUser, "new_email@example.com"));
+        await Assert.ThrowsAsync<InvalidPasswordException>(() =>
+            _userService.ChangePasswordAsync(_user.Username, _user.Password, _user.Password));
+    }
+    
+    [Fact]
+    public async Task ChangeEmail_UserNotFound_ShouldThrow()
+    {
+        await Assert.ThrowsAsync<UserNotFoundException>(() =>
+            _userService.ChangeEmailAsync("fake_username", "new_email@example.com"));
     }
 
     [Fact]
-    public void ChangeEmail_SameEmail_ShouldThrow()
+    public async Task ChangeEmail_SameEmail_ShouldThrow()
     {
-        Assert.Throws<InvalidOperationException>(() =>
-            _userService.ChangeEmail(_user, _user.Email));
+        await Assert.ThrowsAsync<EmailAlreadyInUseException>(() =>
+            _userService.ChangeEmailAsync(_user.Username, _user.Email));
     }
 
     [Fact]
-    public void ChangeUserRole_NotAdmin_ShouldThrow()
+    public async Task ChangeUserRole_NotAdmin_ShouldThrow()
     {
-        Assert.Throws<OperationNotAllowedException>(() =>
-            _userService.ChangeUserRole(_user, _admin.Username));
+        await Assert.ThrowsAsync<OperationNotAllowedException>(() =>
+            _userService.ChangeUserRole(_user.Username, _admin.Username, "User"));
     }
 
     [Fact]
-    public void ChangeUserRole_UserNotFound_ShouldThrow()
+    public async Task ChangeUserRole_UserNotFound_ShouldThrow()
     {
-        Assert.Throws<UserNotFoundException>(() =>
-            _userService.ChangeUserRole(_admin, "non_existing_username"));
+        await Assert.ThrowsAsync<UserNotFoundException>(() =>
+            _userService.ChangeUserRole(_admin.Username, "non_existing_username", "User"));
     }
 }

@@ -1,93 +1,138 @@
+using SQLitePCL;
 using UserAuth.Models;
 using UserAuth.Exceptions;
+using Microsoft.EntityFrameworkCore;
+using UserAuth.Data;
 namespace UserAuth.Services;
 
 public class UserService : IUserService
 {
-    private readonly List<User> _users = new();
-    private int _id = 1;
+    private readonly AppDbContext _context;
 
-    public IEnumerable<User> GetAllUsers()
+    public UserService(AppDbContext context)
     {
-        return _users;
+        _context = context;
     }
 
-    public void ChangeUserRole(User userWhoIsChangingRole, string userWhoseRoleIsChanging)
+    public async Task<List<User>> GetAllAsync()
     {
-        if (userWhoIsChangingRole.Role == "Admin")
-        {
-            try
-            {
-                var user = GetUserByUsername(userWhoseRoleIsChanging);
-                if (user != null)
-                {
-                    user.Role = "Admin";
-                }
-                else
-                {
-                    throw new UserNotFoundException(userWhoseRoleIsChanging);
-                }
+        return await _context.Users.ToListAsync();
+    }
 
-            }
-            catch (UserNotFoundException)
-            {
-                throw new UserNotFoundException(userWhoseRoleIsChanging);
-            }
+    public async Task<User> ChangeUserRole(string username, string targetUsername, string newRole)
+    {
+        var userChanging = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+        if (userChanging == null)
+        {
+            throw new UserNotFoundException(username);
         }
-        else
+
+        if (userChanging.Role != "Admin")
         {
             throw new OperationNotAllowedException();
         }
+
+        var target = await _context.Users.FirstOrDefaultAsync(u => u.Username == targetUsername);
+        if (target == null)
+        {
+            throw new UserNotFoundException(targetUsername);
+        }
+
+        target.Role = newRole;
+        await _context.SaveChangesAsync();
+        return target;
     }
     
-    public User? GetUserByUsername(string username)
+    public async Task<User> GetByUsernameAsync(string username)
     {
-        return _users.FirstOrDefault(u => u.Username == username);
+        var user = await _context.Users
+            .FirstOrDefaultAsync(u => u.Username == username);
+        if (user == null)
+        {
+            throw new UserNotFoundException(username);
+        }
+        return user;
     }
     
-    public User Add(User user)
+    public async Task<User> AddAsync(User user)
     {
-        user.Id = _id++;
-        _users.Add(user);
+        if (await _context.Users.AnyAsync(u => u.Username == user.Username))
+        {
+            throw new UserAlreadyExistsException();
+        }
+
+        _context.Users.Add(user);
+        await _context.SaveChangesAsync();
         return user;
     }
     
     public User? Validate(string username, string password)
     {
-        return _users.FirstOrDefault(u =>
-            u.Username.Trim().Equals(username.Trim(), StringComparison.OrdinalIgnoreCase) &&
-            u.Password == password
-        );
+        return _context.Users.FirstOrDefaultAsync(u => u.Username == username && u.Password == password).Result;
     }
 
-    public User ChangePassword(User user, string newPassword)
+    public async Task<User> ChangePasswordAsync(string username, string oldPassword, string newPassword)
     {
-        if (_users.Contains(user))
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+        if (user == null)
         {
-            if (newPassword == user.Password)
-            {
-                throw new InvalidOperationException("Passwords must be different.");
-            }
-            user.Password = newPassword;
-            user.UpdatedAt = DateTime.Now;
-            return user;       
+            throw new UserNotFoundException(username);
         }
 
-        throw new UserNotFoundException(user.Username);
+        if (user.Password != oldPassword)
+        {
+            throw new InvalidPasswordException();
+        }
+
+        if (user.Password == newPassword)
+        {
+            throw new InvalidPasswordException();
+        }
+        user.Password = newPassword;
+        await _context.SaveChangesAsync();
+        return user;
+    }
+
+    public async Task<User> ChangeEmailAsync(string username, string newEmail)
+    {
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+        if (user == null)
+        {
+            throw new UserNotFoundException(username);
+        }
+        
+        if (await _context.Users.AnyAsync(u => u.Email == newEmail && u.Id != user.Id))
+        {
+            throw new EmailAlreadyInUseException(newEmail);
+        }
+
+        // Check if email is the same as current email
+        if (user.Email == newEmail)
+        {
+            throw new EmailAlreadyInUseException(newEmail);
+        }
+
+        user.Email = newEmail;
+        await _context.SaveChangesAsync();
+        return user;
     }
     
-    public User ChangeEmail(User user, string newEmail)
+    public async Task DeleteAsync(User adminUser, string username)
     {
-        if (_users.Contains(user))
+        if (adminUser.Role == "Admin")
         {
-            if (newEmail == user.Email)
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+            if (user == null)
             {
-                throw new InvalidOperationException("Email must be different.");
+                throw new UserNotFoundException(username);
             }
-            user.Email = newEmail;
-            user.UpdatedAt = DateTime.Now;
-            return user;       
+
+            _context.Users.Remove(user);
+            await _context.SaveChangesAsync();
         }
-        throw new UserNotFoundException(user.Username);
+        else
+        {
+            throw new OperationNotAllowedException();
+        }
     }
 }

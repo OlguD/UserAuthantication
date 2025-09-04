@@ -17,55 +17,60 @@ public class UsersController : ControllerBase
     
     [Authorize]
     [HttpGet("me")]
-    public IActionResult GetProfile()
+    public async Task<IActionResult> GetProfile()
     {
         var username = User.Identity?.Name;
-        return Ok(new { Username = username });
+        if (string.IsNullOrEmpty(username))
+        {
+            return Unauthorized();
+        }
+        var user = await _userService.GetByUsernameAsync(username);
+        return Ok(user);
     }
 
     [Authorize(Roles = "Admin")]
     [HttpGet("all")]
-    public IActionResult AllUsers()
+    public async Task<IActionResult> AllUsers()
     {
-        var users = _userService.GetAllUsers();
+        var users = await _userService.GetAllAsync();
         return Ok(users);
     }
 
     [Authorize(Roles = "Admin")]
     [HttpPut("change-role")]
-    public IActionResult ChangeUserRole([FromBody] ChangeRoleRequest request)
+    public async Task<IActionResult> ChangeUserRole([FromBody] ChangeRoleRequest request)
     {
-        if (request != null && !string.IsNullOrEmpty(request.UserChanging))
-        {
-            _userService.ChangeUserRole(request.UserChangingRole, request.UserChanging);
-            return Ok("User role changed successfully.");
-        }
-        return BadRequest("Invalid request data.");
+        if (request == null)
+            return BadRequest("Invalid request data.");
+
+        var updatedUser = await _userService.ChangeUserRole(
+            request.UserChangingRole,
+            request.UserChanging,
+            request.Role);
+
+        return Ok(updatedUser);
     }
     
     [Authorize]
     [HttpPut("change-password")]
-    public IActionResult ChangePassword([FromBody] ChangePasswordRequest request)
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
     {
-        var updatedUser = _userService.GetUserByUsername(request.User.Username);
-        if (updatedUser != null)
-        {
-            _userService.ChangePassword(updatedUser, request.NewPassword);
-            return Ok("Password changed successfully.");
-        }
-        return BadRequest("User Not Found.");
+        var updatedUser = await _userService.ChangePasswordAsync(
+            request.Username,
+            request.OldPassword,
+            request.NewPassword);
+        
+        return Ok(updatedUser);
     }
     
     [Authorize]
     [HttpPut("change-email")]
     public IActionResult ChangeEmail([FromBody] ChangeEmailRequest request)
     {
-        var updatedUser = _userService.GetUserByUsername(request.User.Username);
-        if (updatedUser != null)
-        {
-            _userService.ChangeEmail(request.User, request.NewEmail);
-            return Ok("Email changed successfully.");
-        }
-        return BadRequest("User Not Found.");
+        var updatedUser = _userService.ChangeEmailAsync(
+            request.Username,
+            request.NewEmail);
+        
+        return Ok(updatedUser);
     }
 }
